@@ -1,0 +1,53 @@
+#FROM ros:humble-perception-jammy
+FROM nvidia/opengl:1.2-glvnd-runtime-ubuntu22.04
+
+ARG USER_NAME
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+RUN groupadd ${USER_NAME} --gid ${USER_ID}\
+    && useradd -l -m ${USER_NAME} -u ${USER_ID} -g ${USER_ID} -s /bin/bash
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Seoul
+
+ARG ROS_DISTRO=humble
+
+USER root
+
+RUN apt-get update 
+RUN apt-get install -y \
+    vim
+
+RUN apt-get update && apt install locales
+RUN locale-gen en_US en_US.UTF-8
+RUN update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+RUN apt-get install -y software-properties-common
+RUN apt-get install -y tzdata
+RUN add-apt-repository universe
+RUN apt-get update && apt-get install -y curl
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
+RUN apt-get update
+RUN apt-get upgrade -y
+RUN apt-get install -y ros-humble-desktop
+RUN apt-get install -y ros-dev-tools
+
+# Install rmf
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-colcon-mixin \
+    ros-dev-tools
+RUN sh -c 'echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable `lsb_release -cs` main" > /etc/apt/sources.list.d/gazebo-stable.list'
+RUN wget https://packages.osrfoundation.org/gazebo.key -O - | sudo apt-key add -
+## These pip packages are only used by rmf_demos which are not released as binaries
+RUN python3 -m pip install flask-socketio fastapi uvicorn
+RUN rosdep init
+RUN rosdep update
+
+RUN colcon mixin add default https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml
+RUN colcon mixin update default
+RUN apt-get update && apt install -y ros-${ROS_DISTRO}-rmf-dev
+
+WORKDIR /root/rmf_ws/
+
+RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc
