@@ -11,23 +11,46 @@ USER root
 ARG ROS_DISTRO=humble
 RUN apt-get update 
 RUN apt-get install -y \
-    vim
+    vim \
+    apt-utils
+
+# Install rviz2, rqt
+RUN apt-get update && apt-get install -y \
+    ros-${ROS_DISTRO}-rviz2 \
+    ros-${ROS_DISTRO}-rqt
 
 # Install rmf
-RUN apt update && sudo apt install -y \
+RUN apt-get update && apt-get install -y \
     python3-pip \
     curl \
     python3-colcon-mixin \
     ros-dev-tools
-RUN sh -c 'echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable `lsb_release -cs` main" > /etc/apt/sources.list.d/gazebo-stable.list'
-RUN wget https://packages.osrfoundation.org/gazebo.key -O - | sudo apt-key add -
+
+WORKDIR /
+RUN mkdir -p rmf_humble_lib/src
+WORKDIR /rmf_humble_lib/
+RUN wget https://raw.githubusercontent.com/open-rmf/rmf/main/rmf.repos
+RUN vcs import src < rmf.repos 
+RUN rosdep update
+RUN rosdep install --from-paths src --ignore-src --rosdistro humble -y
+RUN apt-get update && apt-get install -y \
+    clang \
+    clang-tools \
+    lldb \
+    lld \
+    libstdc++-12-dev
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && colcon build  --mixin release lld
 ## These pip packages are only used by rmf_demos which are not released as binaries
 RUN python3 -m pip install flask-socketio fastapi uvicorn
-RUN rosdep update
 
 RUN colcon mixin update default
-RUN apt-get update && apt install -y ros-${ROS_DISTRO}-rmf-dev
+RUN apt-get update && apt install -y \
+    ros-${ROS_DISTRO}-ros-ign-bridge
 
+COPY ./src /root/rmf_ws/src
 WORKDIR /root/rmf_ws/
 
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc
+RUN echo "source /rmf_humble_lib/install/setup.bash" >> ~/.bashrc
+RUN echo "export CXX=clang++" >> ~/.bashrc
+RUN echo "export CC=clang" >> ~/.bashrc
